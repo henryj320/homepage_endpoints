@@ -1,0 +1,14 @@
+version: "3.3"
+services:
+  sftp-checkup-homepage:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sftp_checkup_homepage
+    restart: unless-stopped
+    ports:
+      - 1012:80
+    volumes:
+      - /home/sftp-user/PhotoBackup/data/sftp-user/upload:/upload
+      - /home/henry/SharedFolder:/sharedFolder
+      - ./cache:/cache
