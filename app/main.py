@@ -11,6 +11,8 @@ from discord import Webhook
 import aiohttp
 import requests
 
+from app.minecraft_log_converter import MinecraftLogConverter as MCL
+
 def update_filestore():
     """Updates the filestore cache on a schedule."""
     cache_file_location = "../cache/filestore.json"
@@ -155,6 +157,13 @@ async def update_ip_to_discord() -> dict:
         "last_run": last_run
     }
     return output
+
+
+@app.get("/minecraft-logs")
+def get_minecraft_logs() -> dict:
+    new = MCL()
+    output = new.run()
+    return {1: output}
 
 
 def get_details(directory: str) -> dict:
