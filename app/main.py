@@ -162,8 +162,7 @@ async def update_ip_to_discord() -> dict:
 @app.get("/minecraft-logs")
 def get_minecraft_logs() -> dict:
     new = MCL()
-    output = new.run()
-    return {1: output}
+    return new.run()
 
 
 def get_details(directory: str) -> dict:

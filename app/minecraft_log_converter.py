@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 import json
 from datetime import datetime
+import time
 
 class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
 
@@ -17,17 +18,6 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
 
     def run(self) -> dict:
         """Main function run by the endpoint."""
-
-        # TODO:
-            # Backup current logs
-                # Create a HashSet of the logs in shortened.log
-                # Create a set of logs in joined.log
-                # Create a set of logs in commands.log
-            # Add new logs
-                # Use extract() to create a set of logs from original.log
-                # For each log returned, add to either joined set or commands set
-                # Add joined set and commands set to the shortened set
-                # Write to joined.log, commands.log and shortened.log
         
         # Initialise the sets.
         joined_set = set()
@@ -63,7 +53,7 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
             timestamp = line.split(" - ")[-1]
             keyword = "joined " if "joined " in line else "left " if "left " in line else "Banned "
 
-            # Convert into the format 2024-05-16T11:32:08.835486479Z left Giddle
+            # Convert into the format "2024-05-16T11:32:08.835486479Z left Giddle".
             new_joined_set.add(f"{timestamp} {keyword}{username}")
         joined_set = joined_set.union(new_joined_set)
 
@@ -73,13 +63,9 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
         for line in commands_extracted:
             username = line.split(" ")[0]
             timestamp = line.split(" - ")[-1]
-
-            print(line)
             command = line.split(": ")[1].split(" - ")[0]
 
-            # Convert into the format 2024-05-16T11:32:08.835486479Z left Giddle
             new_commands_set.add(f"{timestamp} command {username} '{command}'")
-            continue
         commands_set = commands_set.union(new_commands_set)
 
         # Add joined and commands logs to shortened set.
@@ -87,23 +73,48 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
         shortened_set = shortened_set.union(commands_set)
 
         # Write out to the log files.
+        latest_joined_line = ""
         with open(self.joined_log, "w") as joined:
-            for log in joined_set:
+            for log in sorted(joined_set):
                 joined.write(log + "\n")
+                
+                if "joined" in log:
+                    latest_joined_line = log
         
         with open(self.commands_log, "w") as commands:
-            for log in commands_set:
+            for log in sorted(commands_set):
                 commands.write(log + "\n")
         
         with open(self.shortened_log, "w") as short:
-            for log in shortened_set:
+            for log in sorted(shortened_set):
                 short.write(log + "\n")
 
-        return {"Joined": joined_set, "Commands": commands_set, "Shortened": shortened_set}
-        
+        get_players = self.get_players()
 
+        get_latest_connection = self.clean_date_output(latest_joined_line)
+
+
+        return {
+            # "joined": joined_set,
+            # "commands": commands_set,
+            "shortened": shortened_set,
+            "players": get_players["players"],
+            "count": get_players["count"],
+            "last_connection": get_latest_connection
+            }
+        
     
     def extract(self, keywords: list, prefix: str, suffix: str) -> set:
+        """Extract lines containing the given keywords and remove content before the prefix and after the suffix.
+
+        Args:
+            keywords (list): List of keywords to return lines containing.
+            prefix (str): All text before (and including) prefix will be removed.
+            suffix (str): Content after (and including) the suffix will be removed.
+
+        Returns:
+            set: Set containing all lines with the keywords, with prefix/suffix content removed.
+        """
 
         # Extract all lines into an array.
         with open(self.original_log) as original:
@@ -114,7 +125,6 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
         
         for line in lines:
             if [line for keyword in keywords if(keyword in line)]:
-                print(line)
                 json_object = json.loads(line)
 
                 timestamp = json_object["time"].split(".")[0]
@@ -150,3 +160,35 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
             return datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S')
         except ValueError as e:
             return datetime.strptime("1999-01-01T01:01:01", '%Y-%m-%dT%H:%M:%S')
+    
+
+    def get_players(self) -> dict:
+        """Returns all players who have ever connected.
+
+        Returns:
+            dict: List of the players connected and a count.
+        """
+        with open(self.joined_log) as joined:
+            lines = [line.rstrip() for line in joined]
+
+        players = set()
+        for line in lines:
+            player = line.split(" ")[-1]
+            players.add(player)
+
+
+        result = {
+            "players": players,
+            "count": len(players)
+        }
+        
+        return result
+    
+    def clean_date_output(self, line: str) -> str:
+        if line != "":
+            date = line.split("T")[0]
+            hour = line.split("T")[1].split(" ")[0]
+
+            return f"{date} at {hour}"
+        
+        return ""
