@@ -10,82 +10,128 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
         """Initialise the Minecraft Log Converter."""
 
         self.log_location = "/sharedFolder/Henry/Logs/Minecraft/"
-        self.original_name = "minecraft-server.log"
-        self.joined_name = "joined.log"
-        self.commands_name = "commands.log"
-        self.shortened_name = "minecraft-server-shortened.log"
+        self.original_log = f"{self.log_location}minecraft-server.log"
+        self.joined_log = f"{self.log_location}joined.log"
+        self.commands_log = f"{self.log_location}commands.log"
+        self.shortened_log = f"{self.log_location}minecraft-server-shortened.log"
 
     def run(self) -> dict:
         """Main function run by the endpoint."""
 
-        # TODO: CREATE A REFRESH METHOD
-            # Puts the current joined.log and commands.log into a set.
-            # Performs the run() method
-            # Add the new joined.log and commands.log to the sets
-                # A set, so that identical entries are removed
-            # Write those sets into the joined.log and commands.log files
-
-        log = f"{self.log_location}{self.original_name}"
-        size = os.path.getsize(log)
-
-
-        shortened_log = f"{self.log_location}{self.shortened_name}"
-        # if Path(shortened_log).is_file():
-        #     os.remove(shortened_log)
-
-        # If there are newer logs in joined.log that need to be added to shortened.log
-        joined = self.extract_joined()
-        updated = False
-        if self.logs_are_newer(joined): 
-            with open(shortened_log, "a+") as short:
-                for match in joined:
-                    short.write(match + "\n")
-            updated = True
+        # TODO:
+            # Backup current logs
+                # Create a HashSet of the logs in shortened.log
+                # Create a set of logs in joined.log
+                # Create a set of logs in commands.log
+            # Add new logs
+                # Use extract() to create a set of logs from original.log
+                # For each log returned, add to either joined set or commands set
+                # Add joined set and commands set to the shortened set
+                # Write to joined.log, commands.log and shortened.log
         
-        # Extracts all Minecraft commands run.
-        commands = self.extract_commands()
-        if self.logs_are_newer(commands):
-            with open(shortened_log, "a+") as short:
-                for match in commands:
-                    short.write(match + "\n")
-            updated = True
+        # Initialise the sets.
+        joined_set = set()
+        commands_set = set()
+        shortened_set = set()
 
-        return {f"{self.log_location}{self.shortened_name} updated": updated}
+        # Add each line in joined.log to the set.
+        if Path(self.joined_log).is_file():
+            with open(self.joined_log, 'r') as joined:
+                for line in joined:
+                    # Strip the newline character and add the line to the set.
+                    joined_set.add(line.strip())
 
+        # Add each line in commands.log to the set.
+        if Path(self.commands_log).is_file():
+            with open(self.commands_log, 'r') as commands:
+                for line in commands:
+                    # Strip the newline character and add the line to the set.
+                    commands_set.add(line.strip())
 
-    def logs_are_newer(self, logs_to_add: list) -> bool:
-        """Returns whether or not the logs_to_add are newer than the logs in shortened_name.
+        # Add each line in shortened.log to the set.
+        if Path(self.shortened_log).is_file():
+            with open(self.shortened_log, 'r') as short:
+                for line in short:
+                    # Strip the newline character and add the line to the set.
+                    shortened_set.add(line.strip())
 
-        Args:
-            logs_to_add (list): List of the new logs to add to shortened.log
+        # Extract the new joined logs and union with existing joined set.
+        joined_extracted = self.extract(["joined ", "left ", "Banned "], "[93m", "\x1b")
+        new_joined_set = set()
+        for line in joined_extracted:
+            username = line.split(" ")[0]
+            timestamp = line.split(" - ")[-1]
+            keyword = "joined " if "joined " in line else "left " if "left " in line else "Banned "
 
-        Returns:
-            bool: Whether the logs provided are newer or not.
-        """
+            # Convert into the format 2024-05-16T11:32:08.835486479Z left Giddle
+            new_joined_set.add(f"{timestamp} {keyword}{username}")
+        joined_set = joined_set.union(new_joined_set)
 
-        # Immediately return false if the logs to add are empty.
-        if logs_to_add == []:
-            return False
+        # Extract the new commands logs and union with existing commands set.
+        commands_extracted = self.extract(["issued server command"], "]: ", "\r")
+        new_commands_set = set()
+        for line in commands_extracted:
+            username = line.split(" ")[0]
+            timestamp = line.split(" - ")[-1]
+
+            print(line)
+            command = line.split(": ")[1].split(" - ")[0]
+
+            # Convert into the format 2024-05-16T11:32:08.835486479Z left Giddle
+            new_commands_set.add(f"{timestamp} command {username} '{command}'")
+            continue
+        commands_set = commands_set.union(new_commands_set)
+
+        # Add joined and commands logs to shortened set.
+        shortened_set = shortened_set.union(joined_set)
+        shortened_set = shortened_set.union(commands_set)
+
+        # Write out to the log files.
+        with open(self.joined_log, "w") as joined:
+            for log in joined_set:
+                joined.write(log + "\n")
         
-        # Get the line of the oldest log.
-        try:
-            shortened_log = f"{self.log_location}{self.shortened_name}"
-            with open(shortened_log) as short:
-                lines = short.readlines()
-                newest_in_shortened = lines[-1]
-        # Entered if the shortened.log cannot be found.
-        except FileNotFoundError as e:
-            return True
+        with open(self.commands_log, "w") as commands:
+            for log in commands_set:
+                commands.write(log + "\n")
         
-        newest_in_logs_to_add = logs_to_add[-1]
+        with open(self.shortened_log, "w") as short:
+            for log in shortened_set:
+                short.write(log + "\n")
 
-        # If the logs to add are older than the existing logs in shortened_log (nothing to add)
-        if self.get_date_from_string(newest_in_shortened) > self.get_date_from_string(newest_in_logs_to_add):
-            return False
+        return {"Joined": joined_set, "Commands": commands_set, "Shortened": shortened_set}
         
-        # If the logs to add are newer than the existing logs in shortened_log, so must be added
-        return True
 
+    
+    def extract(self, keywords: list, prefix: str, suffix: str) -> set:
+
+        # Extract all lines into an array.
+        with open(self.original_log) as original:
+            lines = [line.rstrip() for line in original]
+
+        # Contains all lines containing the keywords
+        matches = set()
+        
+        for line in lines:
+            if [line for keyword in keywords if(keyword in line)]:
+                print(line)
+                json_object = json.loads(line)
+
+                timestamp = json_object["time"].split(".")[0]
+
+                # Removing the prefix and trailing characters.
+                log_details = json_object["log"]
+                try:
+                    log_shortened = log_details.split(prefix)[1]
+                    log_shortened = log_shortened.split(suffix)[0]
+                except IndexError as e:
+                    # Catches if this is not joined/left/banned log.
+                    continue
+
+                matches.add(f"{log_shortened} - {timestamp}")
+
+        return matches
+    
 
     def get_date_from_string(self, line: str) -> datetime:
         """Returns the datetime from the given string.
@@ -102,127 +148,5 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
             date_string = date_string.split(".")[0]
 
             return datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S')
-        # Return 1999 if it fails.
         except ValueError as e:
             return datetime.strptime("1999-01-01T01:01:01", '%Y-%m-%dT%H:%M:%S')
-
-
-    def extract_joined(self) -> list:
-        """Extract the joined, left and banned lines from the original log file.
-
-        Returns:
-            list: List containing all the new logs.
-        """
-        original_log = f"{self.log_location}{self.original_name}"
-
-        # Extract all lines into an array.
-        with open(original_log) as short:
-            lines = [line.rstrip() for line in short]
-
-        # If the joined logs are already added to shortened.log
-        joined_log = f"{self.log_location}{self.joined_name}"
-        if Path(joined_log).is_file():
-            if not self.logs_are_newer(lines):
-                return []
-
-
-        keywords = ["joined ", "left ", "Banned "]
-
-        matches = []
-        raw = []
-        for line in lines:
-            if [line for keyword in keywords if(keyword in line)]:
-                json_object = json.loads(line)
-
-                timestamp = json_object["time"]
-                log = json_object["log"]
-
-                # Removes starting and trailing characters.
-                try:
-                    log_shortened = log.split("[93m")[1]
-                    log_shortened = log_shortened.split("\x1b")[0]
-                except IndexError as e:
-                    # Catches if this is not joined/left/banned log.
-                    continue
-
-                # Special case for banned, as the format in logs is different.
-                if "Banned" in log:
-                    username = log_shortened.split(" ")[2]
-                    raw.append(line)
-                    matches.append(f"{timestamp} Banned")
-                    continue
-
-                for keyword in keywords:
-                    username = log_shortened.split(" ")[0]
-                    if keyword in log_shortened:
-                        raw.append(line)
-                        matches.append(f"{timestamp} {keyword}{username}")
-
-        
-
-        # TODO: Only add if newer than the current logs!
-        with open(joined_log, "a+") as joined:
-            for match in matches:
-                joined.write(match + "\n")
-
-        shortened_log = f"{self.log_location}{self.shortened_name}"
-        with open(shortened_log, "a+") as short:
-            for match in matches:
-                short.write(match + "\n")
-
-        return matches
-
-
-    def extract_commands(self) -> list:
-        """Extract the command lines from the original log file.
-
-        Returns:
-            list: List containing all the new logs.
-        """
-        original_log = f"{self.log_location}{self.original_name}"
-        commands_log = f"{self.log_location}{self.commands_name}"
-
-        # Extract all lines into an array.
-        with open(original_log) as short:
-            lines = [line.rstrip() for line in short]
-
-        # If the joined logs are already added to shortened.log
-
-        if Path(commands_log).is_file():
-            if not self.logs_are_newer(lines):
-                return []
-
-        matches = []
-        raw = []
-        for line in lines:
-            if "issued server command" in line:
-                json_object = json.loads(line)
-
-                timestamp = json_object["time"]
-                log = json_object["log"]
-
-                # Removes starting and trailing characters.
-                try:
-                    username = log.split(": ")[1]
-                    username = username.split(" ")[0]
-
-                    command = log.split(": ")[2]
-                    command = command.split("\r")[0]
-                except IndexError as e:
-                    # Catches if this is not  command log.
-                    continue
-
-                
-                matches.append(f"{timestamp} command {username} '{command}'")
-                raw.append(line)
-
-        with open(commands_log, "a+") as commands:
-            for match in matches:
-                commands.write(match + "\n")
-
-        shortened_log = f"{self.log_location}{self.shortened_name}"
-        with open(shortened_log, "a+") as short:
-            for match in matches:
-                short.write(match + "\n")
-
-        return matches
