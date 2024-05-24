@@ -1,4 +1,5 @@
 import requests
+import json
 
 class JoplinApi:  # pylint: disable=too-few-public-methods
 
@@ -34,11 +35,28 @@ class JoplinApi:  # pylint: disable=too-few-public-methods
             response = requests.get(url)
             response.raise_for_status()
         except requests.exceptions.HTTPError as e:
-            print(e)
+            return {
+                # "pages": 0,
+                # "notes": 0,
+                # "newest": "",
+                # "images": 0,
+                # "folders": 0,
+                # "tags": 0,
+                "server_alive": self.get_server_status(),
+                "joplin_running": False,
+                "error": e
+            }
+        # Entered if Joplin is closed.
+        except requests.exceptions.ConnectionError as e:
+            return {
+                "server_alive": self.get_server_status(),
+                "joplin_running": False,
+                "error": e
+            }
 
-        # Finds the number of notes
-        results_json = response.json()
-        page_items = len(results_json["items"])
+
+        # Finds the number of notes.
+        page_items = 100
         page = 0
         while page_items > 99:
             new_url = f"{url}&order_by=updated_time&page={page}"
@@ -46,22 +64,81 @@ class JoplinApi:  # pylint: disable=too-few-public-methods
             results_json = response.json()
             page_items = len(results_json["items"])
             page = page + 1
-
+        
         total_notes = (100 * (page - 1) + page_items)
-        latest_updated = results_json["items"][page_items - 1]
         server_alive = self.get_server_status()
+        latest_updated = results_json["items"][page_items - 1]
+        note_pages = page
 
-        print(f"\npages: {page}\ntotal notes: {total_notes}\nlatest updated: {latest_updated['title']}\nserver alive: {server_alive}\n")
 
-        # TODO: Get all folders (and remove the "Week 1" ones)
+        # Gets all images (resources).
+        images_url = f"{self.url_root}resources?token={self.token}"
+        response = requests.get(images_url).json()["items"]
+        total_images = len(response)
 
-        # TODO: Get all images (resources)
+        # Gets all folders (and removes the "Week 1" ones).
+        folders_url = f"{self.url_root}folders?token={self.token}"
+        folders = set()
+        page_items = 100
+        page = 0
+        while page_items > 99:
+            new_url = f"{folders_url}&order_by=updated_time&page={page}"
+            response = requests.get(new_url).json()["items"]
+            page_items = len(response)
+            for folder_dict in response:
+                if "Week" not in folder_dict["title"]:
+                    folders.add(folder_dict["title"])
+            page = page + 1
 
-        # TODO: Get all tags
+        # print(f"Folders: {len(folders)}")
+
+
+        # Gets all tags.
+        tags_url = f"{self.url_root}tags?token={self.token}"
+        tags = set()
+        page_items = 100
+        page = 0
+        while page_items > 99:
+            new_url = f"{tags_url}&order_by=updated_time&page={page}"
+            response = requests.get(new_url).json()["items"]
+            page_items = len(response)
+            for tags_dict in response:
+                tags.add(tags_dict["title"])
+            page = page + 1
+
+        # TODO: Add last cache resync
+
+        # TODO: Calculate total size.
+
+        print(f"\npages: {note_pages}\ntotal notes: {total_notes}\nlatest updated: {latest_updated['title']}\nimages: {total_images}")
+        print(f"folders: {len(folders)}\ntags: {len(tags)}\nserver alive: {server_alive}\n")
+
+        output = {
+            "pages": note_pages,
+            "notes": total_notes,
+            "newest": latest_updated["title"],
+            "images": total_images,
+            "folders": len(folders),
+            "tags": len(tags),
+            "server_alive": server_alive,
+            "joplin_running": True,
+            "error": ""
+        }
+
+        return output
 
 if __name__ == "__main__":
-    server_url = "http://192.168.1.20:1012/joplin-cache"
+    server_url = "http://127.0.0.1:1012/joplin-cache"
+
 
     ja = JoplinApi()
-    ja.retrieve_notes()
-    # requests.put(server_url, ja.retrieve_notes)
+    try: 
+
+        note_details = ja.retrieve_notes()
+        # note_details_json = json.dumps(note_details)
+        response = requests.put(server_url, json=note_details)
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        print(e)
+
+    print(response.json())

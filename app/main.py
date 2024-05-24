@@ -10,6 +10,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from discord import Webhook
 import aiohttp
 import requests
+from pydantic import BaseModel
+from typing import Optional
 
 from app.minecraft_log_converter import MinecraftLogConverter as MCL
 
@@ -163,6 +165,52 @@ async def update_ip_to_discord() -> dict:
 def get_minecraft_logs() -> dict:
     new = MCL()
     return new.run()
+
+class JoplinCacheModel(BaseModel):
+    pages: int
+    notes: int
+    newest: str
+    images: int
+    folders: int
+    tags: int
+    server_alive: bool
+    joplin_running: bool
+    error: Optional[str] = ""
+
+@app.put("/joplin-cache")
+def update_joplin_cache(data: JoplinCacheModel) -> dict:
+    # new = MCL()
+    # return new.run()
+    # print(input["joplin_running"])
+    if data.joplin_running == False:
+        return {"cache_updated": False}
+    
+    total_notes = data.notes
+    total_pages = data.pages
+    total_images = data.images
+    total_folders = data.folders
+    total_tags = data.tags
+    newest_note = data.newest
+    
+
+
+    to_dict = {
+        "total_notes": total_notes,
+        "total_pages": total_pages,
+        "total_images": total_images,
+        "total_folders": total_folders,
+        "total_tags": total_tags,
+        "newest_note": newest_note
+
+    }
+
+    # Convert to JSON and dump into filestore.json.
+    cache_file_location = "../cache/joplin-stats.json"
+    dict_to_json = json.dumps(to_dict, indent=4)
+    with open(cache_file_location, "w", encoding="utf-8") as file:
+        file.write(dict_to_json)
+
+    return {"cache_updated": True}
 
 
 def get_details(directory: str) -> dict:
