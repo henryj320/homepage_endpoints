@@ -128,7 +128,8 @@ class JoplinApi:  # pylint: disable=too-few-public-methods
         return output
 
 if __name__ == "__main__":
-    server_url = "http://127.0.0.1:1012/joplin-cache"
+    # server_url = "http://127.0.0.1:1012/joplin-cache"
+    server_url = "http://192.168.1.20:1012/joplin-cache"
 
 
     ja = JoplinApi()

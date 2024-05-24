@@ -212,6 +212,24 @@ def update_joplin_cache(data: JoplinCacheModel) -> dict:
 
     return {"cache_updated": True}
 
+@app.get("/joplin-cache")
+def get_filestore_details() -> dict:
+    """Return details on the files stored on the Samba.
+
+    Returns:
+        dict: The number of files, last modification, total size and number of users.
+    """
+    location = "/cache/joplin-stats.json"
+
+    # Set up the filestore if it is empty.
+    if os.path.getsize(location) < 1:
+        return {}
+
+    # Read and return the content of the cache file.
+    with open(location, "r", encoding="utf-8") as json_file:
+        loaded_data = json.load(json_file)
+    return loaded_data
+
 
 def get_details(directory: str) -> dict:
     """Returns details on the files inside the directory.
