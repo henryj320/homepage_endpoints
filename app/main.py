@@ -176,12 +176,11 @@ class JoplinCacheModel(BaseModel):
     server_alive: bool
     joplin_running: bool
     error: Optional[str] = ""
+    time: float
 
 @app.put("/joplin-cache")
 def update_joplin_cache(data: JoplinCacheModel) -> dict:
-    # new = MCL()
-    # return new.run()
-    # print(input["joplin_running"])
+
     if data.joplin_running == False:
         return {"cache_updated": False}
     
@@ -191,8 +190,23 @@ def update_joplin_cache(data: JoplinCacheModel) -> dict:
     total_folders = data.folders
     total_tags = data.tags
     newest_note = data.newest
-    
+    send_time = data.time
 
+    cache_file_location = "../cache/joplin-stats.json"
+    mtime = os.path.getmtime(cache_file_location)
+    
+    # Converts the last update to seconds, minutes, hours or days.
+    calc_modified = int(send_time - mtime)
+    calc_modified_unit = "seconds"
+    if calc_modified > 60:
+        calc_modified = int(calc_modified / 60)
+        calc_modified_unit = "minutes"
+    if calc_modified > 60:
+        calc_modified = int(calc_modified / 60)
+        calc_modified_unit = "hours"
+    if calc_modified > 24:
+        calc_modified = int(calc_modified / 24)
+        calc_modified_unit = "days"
 
     to_dict = {
         "total_notes": total_notes,
@@ -200,8 +214,8 @@ def update_joplin_cache(data: JoplinCacheModel) -> dict:
         "total_images": total_images,
         "total_folders": total_folders,
         "total_tags": total_tags,
-        "newest_note": newest_note
-
+        "newest_note": newest_note,
+        "last_update": f"{calc_modified} {calc_modified_unit}"
     }
 
     # Convert to JSON and dump into filestore.json.
@@ -228,6 +242,7 @@ def get_filestore_details() -> dict:
     # Read and return the content of the cache file.
     with open(location, "r", encoding="utf-8") as json_file:
         loaded_data = json.load(json_file)
+    
     return loaded_data
 
 

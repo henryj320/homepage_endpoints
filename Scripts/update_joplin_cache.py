@@ -1,5 +1,6 @@
 import requests
 import json
+import time
 
 class JoplinApi:  # pylint: disable=too-few-public-methods
 
@@ -122,7 +123,8 @@ class JoplinApi:  # pylint: disable=too-few-public-methods
             "tags": len(tags),
             "server_alive": server_alive,
             "joplin_running": True,
-            "error": ""
+            "error": "",
+            "time": time.time()
         }
 
         return output
