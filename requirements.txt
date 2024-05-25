@@ -5,3 +5,4 @@ python-dotenv~=1.0
 apscheduler~=3.10
 discord~=2.3.2
 requests~=2.32.2
+pylint~=3.2.2
