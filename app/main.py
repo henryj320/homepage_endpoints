@@ -4,12 +4,14 @@ from datetime import datetime
 import json
 import os
 import time
+from typing import Optional
 from fastapi import FastAPI
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from discord import Webhook
 import aiohttp
 import requests
+from pydantic import BaseModel
 
 from app.minecraft_log_converter import MinecraftLogConverter as MCL
 
@@ -128,7 +130,7 @@ async def update_ip_to_discord() -> dict:
             "last_run": last_run
         }
         return output
-    
+
     # If IP has not changed.
     if last_ip == public_ip:
         output = {
@@ -161,10 +163,113 @@ async def update_ip_to_discord() -> dict:
 
 @app.get("/minecraft-logs")
 def get_minecraft_logs() -> dict:
+    """Returns the shortened logs, alongside the recently-connected players.
+
+    Returns:
+        dict: Shortened logs, connected players and the latest connection.
+    """
     new = MCL()
     return new.run()
 
+class JoplinCacheModel(BaseModel):
+    """Structure of the data to PUT into the Joplin cache."""
+    pages: int
+    notes: int
+    newest: str
+    images: int
+    folders: int
+    tags: int
+    server_alive: bool
+    joplin_running: bool
+    error: Optional[str] = ""
+    time: float
 
+@app.put("/joplin-cache")
+def update_joplin_cache(data: JoplinCacheModel) -> dict:
+    """PUTs the data into the Joplin cache.
+
+    Args:
+        data (JoplinCacheModel): Structure that the data must follow.
+
+    Returns:
+        dict: Status of the cache update (True for success).
+    """
+    if data.joplin_running is False:
+        return {"cache_updated": False}
+
+    total_notes = data.notes
+    total_pages = data.pages
+    total_images = data.images
+    total_folders = data.folders
+    total_tags = data.tags
+    newest_note = data.newest
+    send_time = data.time
+
+    to_dict = {
+        "total_notes": total_notes,
+        "total_pages": total_pages,
+        "total_images": total_images,
+        "total_folders": total_folders,
+        "total_tags": total_tags,
+        "newest_note": newest_note,
+        "last_update": send_time
+    }
+
+    # Convert to JSON and dump into filestore.json.
+    cache_file_location = "../cache/joplin-stats.json"
+    dict_to_json = json.dumps(to_dict, indent=4)
+    with open(cache_file_location, "w", encoding="utf-8") as file:
+        file.write(dict_to_json)
+
+    return {"cache_updated": True}
+
+@app.get("/joplin-cache")
+def get_joplin_details() -> dict:
+    """Return details on the files stored on the Samba.
+
+    Returns:
+        dict: The number of files, last modification, total size and number of users.
+    """
+    location = "/cache/joplin-stats.json"
+
+    # Set up the filestore if it is empty.
+    if os.path.getsize(location) < 1:
+        return {}
+
+    cache_file_location = "../cache/joplin-stats.json"
+    mtime = os.path.getmtime(cache_file_location)
+
+    # Read and return the content of the cache file.
+    with open(location, "r", encoding="utf-8") as json_file:
+        loaded_data = json.load(json_file)
+
+    # Converts the last update to seconds, minutes, hours or days.
+    calc_modified = int(time.time() - mtime)
+    calc_modified_unit = "seconds"
+    if calc_modified > 60:
+        calc_modified = int(calc_modified / 60)
+        calc_modified_unit = "minutes"
+    if calc_modified > 60:
+        calc_modified = int(calc_modified / 60)
+        calc_modified_unit = "hours"
+    if calc_modified > 24:
+        calc_modified = int(calc_modified / 24)
+        calc_modified_unit = "days"
+
+    added_last_update = {
+        "total_notes": loaded_data["total_notes"],
+        "total_pages": loaded_data["total_pages"],
+        "total_images": loaded_data["total_images"],
+        "total_folders": loaded_data["total_folders"],
+        "total_tags": loaded_data["total_tags"],
+        "newest_note": loaded_data["newest_note"],
+        "last_update": f"{calc_modified} {calc_modified_unit}"
+    }
+    loaded_data.update(added_last_update)
+
+    return loaded_data
+
+# pylint: disable=too-many-locals
 def get_details(directory: str) -> dict:
     """Returns details on the files inside the directory.
 
@@ -181,13 +286,13 @@ def get_details(directory: str) -> dict:
     unique_files = set()
     modified_this_week = set()
 
+    # pylint: disable=unused-variable
     for root, dirs, files in os.walk(directory):
         #  Get when the most recent is updated.
         for file in files:
             file_path = os.path.join(root, file)
             mtime = os.path.getmtime(file_path)
-            if mtime > latest_mtime:
-                latest_mtime = mtime
+            latest_mtime = max(latest_mtime, mtime)
 
             # Calculate the difference in seconds between now and the modification time
             time_difference = time.time() - mtime

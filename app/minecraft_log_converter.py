@@ -1,12 +1,11 @@
-import os
+"""Extract details from the minecraft logs and return them."""
 from pathlib import Path
-import shutil
 import json
 from datetime import datetime
-import time
+
 
 class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
-
+    """Main class to convert the logs."""
     def __init__(self):
         """Initialise the Minecraft Log Converter."""
 
@@ -18,7 +17,7 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
 
     def run(self) -> dict:
         """Main function run by the endpoint."""
-        
+        # pylint: disable=too-many-locals
         # Initialise the sets.
         joined_set = set()
         commands_set = set()
@@ -26,21 +25,21 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
 
         # Add each line in joined.log to the set.
         if Path(self.joined_log).is_file():
-            with open(self.joined_log, 'r') as joined:
+            with open(self.joined_log, "r", encoding="utf-8") as joined:
                 for line in joined:
                     # Strip the newline character and add the line to the set.
                     joined_set.add(line.strip())
 
         # Add each line in commands.log to the set.
         if Path(self.commands_log).is_file():
-            with open(self.commands_log, 'r') as commands:
+            with open(self.commands_log, "r", encoding="utf-8") as commands:
                 for line in commands:
                     # Strip the newline character and add the line to the set.
                     commands_set.add(line.strip())
 
         # Add each line in shortened.log to the set.
         if Path(self.shortened_log).is_file():
-            with open(self.shortened_log, 'r') as short:
+            with open(self.shortened_log, "r", encoding="utf-8") as short:
                 for line in short:
                     # Strip the newline character and add the line to the set.
                     shortened_set.add(line.strip())
@@ -51,7 +50,11 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
         for line in joined_extracted:
             username = line.split(" ")[0]
             timestamp = line.split(" - ")[-1]
-            keyword = "joined " if "joined " in line else "left " if "left " in line else "Banned "
+            keyword = (
+                "joined "
+                if "joined " in line
+                else "left " if "left " in line else "Banned "
+            )
 
             # Convert into the format "2024-05-16T11:32:08.835486479Z left Giddle".
             new_joined_set.add(f"{timestamp} {keyword}{username}")
@@ -74,18 +77,18 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
 
         # Write out to the log files.
         latest_joined_line = ""
-        with open(self.joined_log, "w") as joined:
+        with open(self.joined_log, "w", encoding="utf-8") as joined:
             for log in sorted(joined_set):
                 joined.write(log + "\n")
-                
+
                 if "joined" in log:
                     latest_joined_line = log
-        
-        with open(self.commands_log, "w") as commands:
+
+        with open(self.commands_log, "w", encoding="utf-8") as commands:
             for log in sorted(commands_set):
                 commands.write(log + "\n")
-        
-        with open(self.shortened_log, "w") as short:
+
+        with open(self.shortened_log, "w", encoding="utf-8") as short:
             for log in sorted(shortened_set):
                 short.write(log + "\n")
 
@@ -93,17 +96,15 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
 
         get_latest_connection = self.clean_date_output(latest_joined_line)
 
-
         return {
             # "joined": joined_set,
             # "commands": commands_set,
             "shortened": shortened_set,
             "players": get_players["players"],
             "count": get_players["count"],
-            "last_connection": get_latest_connection
-            }
-        
-    
+            "last_connection": get_latest_connection,
+        }
+
     def extract(self, keywords: list, prefix: str, suffix: str) -> set:
         """Extract lines containing the given keywords and remove content before the prefix and after the suffix.
 
@@ -117,14 +118,15 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
         """
 
         # Extract all lines into an array.
-        with open(self.original_log) as original:
+        with open(self.original_log, encoding="utf-8") as original:
             lines = [line.rstrip() for line in original]
 
         # Contains all lines containing the keywords
         matches = set()
-        
+
         for line in lines:
-            if [line for keyword in keywords if(keyword in line)]:
+            # pylint: disable=superfluous-parens
+            if [line for keyword in keywords if (keyword in line)]:
                 json_object = json.loads(line)
 
                 timestamp = json_object["time"].split(".")[0]
@@ -134,14 +136,13 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
                 try:
                     log_shortened = log_details.split(prefix)[1]
                     log_shortened = log_shortened.split(suffix)[0]
-                except IndexError as e:
+                except IndexError:
                     # Catches if this is not joined/left/banned log.
                     continue
 
                 matches.add(f"{log_shortened} - {timestamp}")
 
         return matches
-    
 
     def get_date_from_string(self, line: str) -> datetime:
         """Returns the datetime from the given string.
@@ -157,10 +158,9 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
             date_string = line.split(" ")[0]
             date_string = date_string.split(".")[0]
 
-            return datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%S')
-        except ValueError as e:
-            return datetime.strptime("1999-01-01T01:01:01", '%Y-%m-%dT%H:%M:%S')
-    
+            return datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%S")
+        except ValueError:
+            return datetime.strptime("1999-01-01T01:01:01", "%Y-%m-%dT%H:%M:%S")
 
     def get_players(self) -> dict:
         """Returns all players who have ever connected.
@@ -168,7 +168,7 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
         Returns:
             dict: List of the players connected and a count.
         """
-        with open(self.joined_log) as joined:
+        with open(self.joined_log, encoding="utf-8") as joined:
             lines = [line.rstrip() for line in joined]
 
         players = set()
@@ -176,19 +176,23 @@ class MinecraftLogConverter:  # pylint: disable=too-few-public-methods
             player = line.split(" ")[-1]
             players.add(player)
 
+        result = {"players": players, "count": len(players)}
 
-        result = {
-            "players": players,
-            "count": len(players)
-        }
-        
         return result
-    
+
     def clean_date_output(self, line: str) -> str:
+        """Takes the log date and converts it into "2024-05-25 at 13:00".
+
+        Args:
+            line (str): Raw log line.
+
+        Returns:
+            str: Cleaned up date output.
+        """
         if line != "":
             date = line.split("T")[0]
             hour = line.split("T")[1].split(" ")[0]
 
             return f"{date} at {hour}"
-        
+
         return ""
