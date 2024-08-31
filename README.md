@@ -1,13 +1,13 @@
-# sftp_checkup_homepage
+# homepage_endpoints
 
-Last update: 2024-04-27 18:59
+Last update: 2024-08-31 17:59
 <br><br>
 
-Sets up a FastAPI to control a custom widget on Homepage.
+Sets up a FastAPI to control a custom widget on Homepage. Previously named "sftp_checkup_homepage".
 
 ## clamav_homepage
 
-**Title**: sftp_checkup_homepage
+**Title**: homepage_endpoints
 
 **Date Started**: 2024-04-16
 
