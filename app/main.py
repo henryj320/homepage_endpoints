@@ -72,6 +72,17 @@ def get_poppy_details() -> dict:
     return get_details(directory)
 
 
+@app.get("/Mum")
+def get_mum_details() -> dict:
+    """Get details on the images synced from Mum's phone to the server.
+
+    Returns:
+        dict: The number of images, last sync date, total size and images synced this week.
+    """
+    directory = "/upload/Jill"
+    return get_details(directory)
+
+
 @app.get("/filestore")
 def get_filestore_details() -> dict:
     """Return details on the files stored on the Samba.
@@ -145,7 +156,7 @@ async def update_ip_to_discord() -> dict:
     with open(cache_file_location, 'a', encoding='utf-8') as file:
         file.write(public_ip + '\n')
 
-    webhook_url = 'https://discord.com/api/webhooks/1232449180471918624/8p8DZ6AP0Mp6xLwKKM3KaCN-seJhxTd0k8ge0F1smO2DLVX5HniNvyFV2oz2bcM3UmlA'
+    webhook_url = 'https://discord.com/api/webhooks/1279539607922409532/jUJmzeZNC41Cdz6twOf2jMWb-4SDYgIz7LdAanfb8iQVHrhnH4hxtxrq8lOzjbX1Y23L'   
     async with aiohttp.ClientSession() as session:
         webhook = Webhook.from_url(webhook_url, session=session)
         await webhook.send(f"Public IP changed to: {public_ip}", username='Public IP Checker')
@@ -291,7 +302,7 @@ def get_details(directory: str) -> dict:
         #  Get when the most recent is updated.
         for file in files:
             file_path = os.path.join(root, file)
-            mtime = os.path.getmtime(file_path)
+            mtime = os.path.getctime(file_path)
             latest_mtime = max(latest_mtime, mtime)
 
             # Calculate the difference in seconds between now and the modification time
